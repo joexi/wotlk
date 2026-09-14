@@ -1,5 +1,11 @@
 # nodejs modules
 node_modules
+
+# repo-local toolchain downloaded by winbuild.ps1
+.tools/
+
+# local mirror of external images, downloaded by winbuild.ps1 cnassets
+assets/zamimg/
 ui/core/index.ts
 ui/*/index.html
 .dirstamp
@@ -11,6 +17,7 @@ ui/*/index.html
 # binaries
 dist
 binary_dist
+/bin/
 sim/web/__debug_bin
 /wowsimwotlkcli*
 /wowsimwotlk*

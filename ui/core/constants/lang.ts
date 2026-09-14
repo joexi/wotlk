@@ -13,6 +13,10 @@ export const wowheadSupportedLanguages: Record<string, string> = {
 // Returns a 2-letter language code if it is a wowhead-supported language, or '' otherwise.
 export function getBrowserLanguageCode(): string {
 	const browserLang = (navigator.language || '').substring(0, 2);
+	// Browsers report Chinese as 'zh', but wowhead uses 'cn' as its language prefix.
+	if (browserLang == 'zh') {
+		return 'cn';
+	}
 	if (Object.keys(wowheadSupportedLanguages).includes(browserLang)) {
 		return browserLang;
 	} else {
