@@ -16,6 +16,7 @@ var castersWithElemental = &proto.Party{
 			Race:      proto.Race_RaceTauren,
 			Class:     proto.Class_ClassDruid,
 			Equipment: MoonkinEquipment,
+			Rotation:  core.GetAplRotation("../ui/balance_druid/apls", "basic_p3").Rotation,
 			Spec: &proto.Player_BalanceDruid{
 				BalanceDruid: &proto.BalanceDruid{
 					Options: &proto.BalanceDruid_Options{
@@ -36,6 +37,7 @@ var castersWithElemental = &proto.Party{
 			Race:      proto.Race_RaceUndead,
 			Class:     proto.Class_ClassPriest,
 			Equipment: ShadowEquipment,
+			Rotation:  core.GetAplRotation("../ui/shadow_priest/apls", "default").Rotation,
 			Spec: &proto.Player_ShadowPriest{
 				ShadowPriest: &proto.ShadowPriest{
 					Options: &proto.ShadowPriest_Options{},
@@ -54,6 +56,7 @@ var castersWithElemental = &proto.Party{
 			Race:      proto.Race_RaceTroll,
 			Class:     proto.Class_ClassShaman,
 			Equipment: ElementalEquipment,
+			Rotation:  core.GetAplRotation("../ui/elemental_shaman/apls", "default").Rotation,
 			Spec: &proto.Player_ElementalShaman{
 				ElementalShaman: &proto.ElementalShaman{
 					Options: &proto.ElementalShaman_Options{
@@ -80,6 +83,7 @@ var castersWithElemental = &proto.Party{
 			Race:      proto.Race_RaceTroll,
 			Class:     proto.Class_ClassMage,
 			Equipment: ArcaneEquipment,
+			Rotation:  core.GetAplRotation("../ui/mage/apls", "arcane").Rotation,
 			Spec: &proto.Player_Mage{
 				Mage: &proto.Mage{
 					Options: &proto.Mage_Options{
@@ -107,6 +111,7 @@ var castersWithResto = &proto.Party{
 			Race:      proto.Race_RaceTauren,
 			Class:     proto.Class_ClassDruid,
 			Equipment: MoonkinEquipment,
+			Rotation:  core.GetAplRotation("../ui/balance_druid/apls", "basic_p3").Rotation,
 			Spec: &proto.Player_BalanceDruid{
 				BalanceDruid: &proto.BalanceDruid{
 					Options: &proto.BalanceDruid_Options{
@@ -130,6 +135,7 @@ var castersWithResto = &proto.Party{
 			Race:      proto.Race_RaceUndead,
 			Class:     proto.Class_ClassPriest,
 			Equipment: ShadowEquipment,
+			Rotation:  core.GetAplRotation("../ui/shadow_priest/apls", "default").Rotation,
 			Spec: &proto.Player_ShadowPriest{
 				ShadowPriest: &proto.ShadowPriest{
 					Options: &proto.ShadowPriest_Options{},
@@ -148,6 +154,7 @@ var castersWithResto = &proto.Party{
 			Race:      proto.Race_RaceTroll,
 			Class:     proto.Class_ClassMage,
 			Equipment: ArcaneEquipment,
+			Rotation:  core.GetAplRotation("../ui/mage/apls", "arcane").Rotation,
 			Spec: &proto.Player_Mage{
 				Mage: &proto.Mage{
 					Options: &proto.Mage_Options{
@@ -169,8 +176,8 @@ var castersWithResto = &proto.Party{
 	},
 }
 
-func BenchmarkSimulate(b *testing.B) {
-	rsr := &proto.RaidSimRequest{
+func makeBenchmarkRaidSimRequest() *proto.RaidSimRequest {
+	return &proto.RaidSimRequest{
 		Raid: &proto.Raid{
 			Parties: []*proto.Party{
 				castersWithElemental,
@@ -182,6 +189,7 @@ func BenchmarkSimulate(b *testing.B) {
 							Race:      proto.Race_RaceTroll,
 							Class:     proto.Class_ClassShaman,
 							Equipment: EnhancementEquipment,
+							Rotation:  core.GetAplRotation("../ui/enhancement_shaman/apls", "default_wf").Rotation,
 							Spec: &proto.Player_EnhancementShaman{
 								EnhancementShaman: &proto.EnhancementShaman{
 									Options: &proto.EnhancementShaman_Options{
@@ -229,8 +237,27 @@ func BenchmarkSimulate(b *testing.B) {
 		},
 		SimOptions: core.AverageDefaultSimTestOptions,
 	}
+}
 
-	core.RaidBenchmark(b, rsr)
+// Measures environment construction + a single iteration per op.
+func BenchmarkSimulate(b *testing.B) {
+	core.RaidBenchmark(b, makeBenchmarkRaidSimRequest())
+}
+
+// Measures the steady-state cost of one sim iteration, amortizing environment
+// construction over b.N iterations. This mirrors what the UI's Simulate button
+// actually runs (one env, thousands of iterations).
+func BenchmarkSimulateSteadyState(b *testing.B) {
+	rsr := makeBenchmarkRaidSimRequest()
+	rsr.Encounter.Duration = core.LongDuration
+	// IsTest routes every RandomFloat call through a map lookup; the real sim
+	// path (what users run) does not, so benchmark with it off.
+	rsr.SimOptions.IsTest = false
+	rsr.SimOptions.Iterations = int32(b.N)
+	result := core.RunRaidSim(rsr)
+	if result.ErrorResult != "" {
+		b.Fatalf("BenchmarkSimulateSteadyState failed: %v", result.ErrorResult)
+	}
 }
 
 // P3 gear for each class

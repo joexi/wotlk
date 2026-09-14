@@ -267,6 +267,10 @@ type APLValueCompare struct {
 	op  proto.APLValueCompare_ComparisonOperator
 	lhs APLValue
 	rhs APLValue
+
+	// Comparison function, resolved from the operand type and operator at
+	// construction time so GetBool doesn't re-dispatch on every evaluation.
+	compare func(sim *Simulation) bool
 }
 
 func (rot *APLRotation) newValueCompare(config *proto.APLValueCompare) APLValue {
@@ -279,11 +283,13 @@ func (rot *APLRotation) newValueCompare(config *proto.APLValueCompare) APLValue 
 		rot.ValidationWarning("Bool types only allow Equals and NotEquals comparisons!")
 		return nil
 	}
-	return &APLValueCompare{
+	value := &APLValueCompare{
 		op:  config.Op,
 		lhs: lhs,
 		rhs: rhs,
 	}
+	value.compare = value.makeCompareFn()
+	return value
 }
 func (value *APLValueCompare) GetInnerValues() []APLValue {
 	return []APLValue{value.lhs, value.rhs}
@@ -292,77 +298,83 @@ func (value *APLValueCompare) Type() proto.APLValueType {
 	return proto.APLValueType_ValueTypeBool
 }
 func (value *APLValueCompare) GetBool(sim *Simulation) bool {
+	return value.compare(sim)
+}
+
+func (value *APLValueCompare) makeCompareFn() func(sim *Simulation) bool {
+	lhs, rhs := value.lhs, value.rhs
 	switch value.lhs.Type() {
 	case proto.APLValueType_ValueTypeBool:
 		switch value.op {
 		case proto.APLValueCompare_OpEq:
-			return value.lhs.GetBool(sim) == value.rhs.GetBool(sim)
+			return func(sim *Simulation) bool { return lhs.GetBool(sim) == rhs.GetBool(sim) }
 		case proto.APLValueCompare_OpNe:
-			return value.lhs.GetBool(sim) != value.rhs.GetBool(sim)
+			return func(sim *Simulation) bool { return lhs.GetBool(sim) != rhs.GetBool(sim) }
 		}
 	case proto.APLValueType_ValueTypeInt:
 		switch value.op {
 		case proto.APLValueCompare_OpEq:
-			return value.lhs.GetInt(sim) == value.rhs.GetInt(sim)
+			return func(sim *Simulation) bool { return lhs.GetInt(sim) == rhs.GetInt(sim) }
 		case proto.APLValueCompare_OpNe:
-			return value.lhs.GetInt(sim) != value.rhs.GetInt(sim)
+			return func(sim *Simulation) bool { return lhs.GetInt(sim) != rhs.GetInt(sim) }
 		case proto.APLValueCompare_OpLt:
-			return value.lhs.GetInt(sim) < value.rhs.GetInt(sim)
+			return func(sim *Simulation) bool { return lhs.GetInt(sim) < rhs.GetInt(sim) }
 		case proto.APLValueCompare_OpLe:
-			return value.lhs.GetInt(sim) <= value.rhs.GetInt(sim)
+			return func(sim *Simulation) bool { return lhs.GetInt(sim) <= rhs.GetInt(sim) }
 		case proto.APLValueCompare_OpGt:
-			return value.lhs.GetInt(sim) > value.rhs.GetInt(sim)
+			return func(sim *Simulation) bool { return lhs.GetInt(sim) > rhs.GetInt(sim) }
 		case proto.APLValueCompare_OpGe:
-			return value.lhs.GetInt(sim) >= value.rhs.GetInt(sim)
+			return func(sim *Simulation) bool { return lhs.GetInt(sim) >= rhs.GetInt(sim) }
 		}
 	case proto.APLValueType_ValueTypeFloat:
 		switch value.op {
 		case proto.APLValueCompare_OpEq:
-			return value.lhs.GetFloat(sim) == value.rhs.GetFloat(sim)
+			return func(sim *Simulation) bool { return lhs.GetFloat(sim) == rhs.GetFloat(sim) }
 		case proto.APLValueCompare_OpNe:
-			return value.lhs.GetFloat(sim) != value.rhs.GetFloat(sim)
+			return func(sim *Simulation) bool { return lhs.GetFloat(sim) != rhs.GetFloat(sim) }
 		case proto.APLValueCompare_OpLt:
-			return value.lhs.GetFloat(sim) < value.rhs.GetFloat(sim)
+			return func(sim *Simulation) bool { return lhs.GetFloat(sim) < rhs.GetFloat(sim) }
 		case proto.APLValueCompare_OpLe:
-			return value.lhs.GetFloat(sim) <= value.rhs.GetFloat(sim)
+			return func(sim *Simulation) bool { return lhs.GetFloat(sim) <= rhs.GetFloat(sim) }
 		case proto.APLValueCompare_OpGt:
-			return value.lhs.GetFloat(sim) > value.rhs.GetFloat(sim)
+			return func(sim *Simulation) bool { return lhs.GetFloat(sim) > rhs.GetFloat(sim) }
 		case proto.APLValueCompare_OpGe:
-			return value.lhs.GetFloat(sim) >= value.rhs.GetFloat(sim)
+			return func(sim *Simulation) bool { return lhs.GetFloat(sim) >= rhs.GetFloat(sim) }
 		}
 	case proto.APLValueType_ValueTypeDuration:
 		switch value.op {
 		case proto.APLValueCompare_OpEq:
-			return value.lhs.GetDuration(sim) == value.rhs.GetDuration(sim)
+			return func(sim *Simulation) bool { return lhs.GetDuration(sim) == rhs.GetDuration(sim) }
 		case proto.APLValueCompare_OpNe:
-			return value.lhs.GetDuration(sim) != value.rhs.GetDuration(sim)
+			return func(sim *Simulation) bool { return lhs.GetDuration(sim) != rhs.GetDuration(sim) }
 		case proto.APLValueCompare_OpLt:
-			return value.lhs.GetDuration(sim) < value.rhs.GetDuration(sim)
+			return func(sim *Simulation) bool { return lhs.GetDuration(sim) < rhs.GetDuration(sim) }
 		case proto.APLValueCompare_OpLe:
-			return value.lhs.GetDuration(sim) <= value.rhs.GetDuration(sim)
+			return func(sim *Simulation) bool { return lhs.GetDuration(sim) <= rhs.GetDuration(sim) }
 		case proto.APLValueCompare_OpGt:
-			return value.lhs.GetDuration(sim) > value.rhs.GetDuration(sim)
+			return func(sim *Simulation) bool { return lhs.GetDuration(sim) > rhs.GetDuration(sim) }
 		case proto.APLValueCompare_OpGe:
-			return value.lhs.GetDuration(sim) >= value.rhs.GetDuration(sim)
+			return func(sim *Simulation) bool { return lhs.GetDuration(sim) >= rhs.GetDuration(sim) }
 		}
 	case proto.APLValueType_ValueTypeString:
 		switch value.op {
 		case proto.APLValueCompare_OpEq:
-			return value.lhs.GetString(sim) == value.rhs.GetString(sim)
+			return func(sim *Simulation) bool { return lhs.GetString(sim) == rhs.GetString(sim) }
 		case proto.APLValueCompare_OpNe:
-			return value.lhs.GetString(sim) != value.rhs.GetString(sim)
+			return func(sim *Simulation) bool { return lhs.GetString(sim) != rhs.GetString(sim) }
 		case proto.APLValueCompare_OpLt:
-			return value.lhs.GetString(sim) < value.rhs.GetString(sim)
+			return func(sim *Simulation) bool { return lhs.GetString(sim) < rhs.GetString(sim) }
 		case proto.APLValueCompare_OpLe:
-			return value.lhs.GetString(sim) <= value.rhs.GetString(sim)
+			return func(sim *Simulation) bool { return lhs.GetString(sim) <= rhs.GetString(sim) }
 		case proto.APLValueCompare_OpGt:
-			return value.lhs.GetString(sim) > value.rhs.GetString(sim)
+			return func(sim *Simulation) bool { return lhs.GetString(sim) > rhs.GetString(sim) }
 		case proto.APLValueCompare_OpGe:
-			return value.lhs.GetString(sim) >= value.rhs.GetString(sim)
+			return func(sim *Simulation) bool { return lhs.GetString(sim) >= rhs.GetString(sim) }
 		}
 	}
-	return false
+	return func(sim *Simulation) bool { return false }
 }
+
 func (value *APLValueCompare) String() string {
 	return fmt.Sprintf("%s %s %s", value.lhs, value.op, value.rhs)
 }

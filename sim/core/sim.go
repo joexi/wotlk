@@ -580,24 +580,21 @@ func (sim *Simulation) AddPendingAction(pa *PendingAction) {
 	//	panic(fmt.Sprintf("Cant add action in the past: %s", pa.NextActionAt))
 	//}
 	pa.consumed = false
-	for index, v := range sim.pendingActions[1:] {
-		if v.NextActionAt < pa.NextActionAt || (v.NextActionAt == pa.NextActionAt && v.Priority >= pa.Priority) {
-			//if sim.Log != nil {
-			//	sim.Log("Adding action at index %d for time %s", index - len(sim.pendingActions), pa.NextActionAt)
-			//	for i := index; i < len(sim.pendingActions); i++ {
-			//		sim.Log("Upcoming action at %s", sim.pendingActions[i].NextActionAt)
-			//	}
-			//}
-			sim.pendingActions = append(sim.pendingActions, pa)
-			copy(sim.pendingActions[index+2:], sim.pendingActions[index+1:])
-			sim.pendingActions[index+1] = pa
-			return
+	// The queue is sorted descending by NextActionAt (soonest last, popped from
+	// the back), with ties ordered ascending by Priority and FIFO within equal
+	// priority. New actions are usually the soonest event in the queue, so scan
+	// backward from the end to find the insertion point.
+	pas := sim.pendingActions
+	i := len(pas) - 1
+	for ; i > 0; i-- {
+		if v := pas[i]; v.NextActionAt > pa.NextActionAt || (v.NextActionAt == pa.NextActionAt && v.Priority < pa.Priority) {
+			break
 		}
 	}
-	//if sim.Log != nil {
-	//	sim.Log("Adding action at end for time %s", pa.NextActionAt)
-	//}
-	sim.pendingActions = append(sim.pendingActions, pa)
+	pas = append(pas, pa)
+	copy(pas[i+2:], pas[i+1:])
+	pas[i+1] = pa
+	sim.pendingActions = pas
 }
 
 func (sim *Simulation) RegisterExecutePhaseCallback(callback func(sim *Simulation, isExecute int32)) {

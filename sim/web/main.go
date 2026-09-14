@@ -92,7 +92,7 @@ func main() {
 // Handlers to decode and handle each proto function
 var handlers = map[string]apiHandler{
 	"/raidSim": {msg: func() googleProto.Message { return &proto.RaidSimRequest{} }, handle: func(msg googleProto.Message) googleProto.Message {
-		return core.RunRaidSim(msg.(*proto.RaidSimRequest))
+		return core.RunConcurrentRaidSim(msg.(*proto.RaidSimRequest))
 	}},
 	"/statWeights": {msg: func() googleProto.Message { return &proto.StatWeightsRequest{} }, handle: func(msg googleProto.Message) googleProto.Message {
 		return core.StatWeights(msg.(*proto.StatWeightsRequest))
@@ -104,7 +104,7 @@ var handlers = map[string]apiHandler{
 
 var asyncAPIHandlers = map[string]asyncAPIHandler{
 	"/raidSimAsync": {msg: func() googleProto.Message { return &proto.RaidSimRequest{} }, handle: func(msg googleProto.Message, reporter chan *proto.ProgressMetrics) {
-		core.RunRaidSimAsync(msg.(*proto.RaidSimRequest), reporter)
+		core.RunConcurrentRaidSimAsync(msg.(*proto.RaidSimRequest), reporter)
 	}},
 	"/statWeightsAsync": {msg: func() googleProto.Message { return &proto.StatWeightsRequest{} }, handle: func(msg googleProto.Message, reporter chan *proto.ProgressMetrics) {
 		core.StatWeightsAsync(msg.(*proto.StatWeightsRequest), reporter)

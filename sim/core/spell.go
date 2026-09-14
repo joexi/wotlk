@@ -95,6 +95,7 @@ type Spell struct {
 
 	SpellMetrics      []SpellMetrics
 	splitSpellMetrics [][]SpellMetrics // Used to split metrics by some condition.
+	actionMetrics     []*ActionMetrics // Cached aggregation entries, one per metrics split.
 	casts             int              // Sum of casts on all targets, for efficient CPM calculation
 
 	// Performs the actions of this spell.
@@ -396,9 +397,10 @@ func (spell *Spell) finalize() {
 }
 
 func (spell *Spell) reset(_ *Simulation) {
-	for i := range spell.splitSpellMetrics {
-		for j := range spell.SpellMetrics {
-			spell.splitSpellMetrics[i][j] = SpellMetrics{}
+	for _, spellMetrics := range spell.splitSpellMetrics {
+		// This form compiles to a memclr.
+		for j := range spellMetrics {
+			spellMetrics[j] = SpellMetrics{}
 		}
 	}
 	spell.casts = 0
@@ -425,12 +427,21 @@ func (spell *Spell) doneIteration() {
 		return
 	}
 
-	if len(spell.splitSpellMetrics) == 1 {
-		spell.Unit.Metrics.addSpellMetrics(spell, spell.ActionID, spell.SpellMetrics)
-	} else {
-		for i, spellMetrics := range spell.splitSpellMetrics {
-			spell.Unit.Metrics.addSpellMetrics(spell, spell.ActionID.WithTag(int32(i)), spellMetrics)
+	// Cache the aggregation entries so later iterations skip the map lookups.
+	// The entries are stable for the lifetime of the sim.
+	if spell.actionMetrics == nil {
+		spell.actionMetrics = make([]*ActionMetrics, len(spell.splitSpellMetrics))
+		if len(spell.splitSpellMetrics) == 1 {
+			spell.actionMetrics[0] = spell.Unit.Metrics.getOrCreateActionMetrics(spell, spell.ActionID, len(spell.SpellMetrics))
+		} else {
+			for i, spellMetrics := range spell.splitSpellMetrics {
+				spell.actionMetrics[i] = spell.Unit.Metrics.getOrCreateActionMetrics(spell, spell.ActionID.WithTag(int32(i)), len(spellMetrics))
+			}
 		}
+	}
+
+	for i, spellMetrics := range spell.splitSpellMetrics {
+		spell.Unit.Metrics.addSpellMetrics(spell, spell.actionMetrics[i], spellMetrics)
 	}
 }
 
@@ -466,12 +477,8 @@ func (spell *Spell) CanCast(sim *Simulation, target *Unit) bool {
 		return false
 	}
 
-	if spell.ExtraCastCondition != nil && !spell.ExtraCastCondition(sim, target) {
-		//if sim.Log != nil {
-		//	sim.Log("Cant cast because of extra condition")
-		//}
-		return false
-	}
+	// Cheap checks (plain loads) go first; ExtraCastCondition is a pure
+	// predicate, so evaluating it only after these does not change the result.
 
 	// While casting or channeling, no other action is possible
 	if spell.Unit.Hardcast.Expires > sim.CurrentTime {
@@ -484,6 +491,13 @@ func (spell *Spell) CanCast(sim *Simulation, target *Unit) bool {
 	if spell.DefaultCast.GCD > 0 && !spell.Unit.GCD.IsReady(sim) {
 		//if sim.Log != nil {
 		//	sim.Log("Cant cast because of GCD")
+		//}
+		return false
+	}
+
+	if spell.ExtraCastCondition != nil && !spell.ExtraCastCondition(sim, target) {
+		//if sim.Log != nil {
+		//	sim.Log("Cant cast because of extra condition")
 		//}
 		return false
 	}

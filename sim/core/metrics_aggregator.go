@@ -295,8 +295,9 @@ func (unit *Unit) NewFocusMetrics(actionID ActionID) *ResourceMetrics {
 	return unit.Metrics.NewResourceMetrics(actionID, proto.ResourceType_ResourceTypeFocus)
 }
 
-// Adds the results of a spell to the character metrics.
-func (unitMetrics *UnitMetrics) addSpellMetrics(spell *Spell, actionID ActionID, spellMetrics []SpellMetrics) {
+// Returns the (stable) aggregation entry for the given action, creating it if
+// needed. Callers may cache the returned pointer for the lifetime of the sim.
+func (unitMetrics *UnitMetrics) getOrCreateActionMetrics(spell *Spell, actionID ActionID, numTargets int) *ActionMetrics {
 	actionMetrics, ok := unitMetrics.actions[actionID]
 
 	if !ok {
@@ -305,14 +306,24 @@ func (unitMetrics *UnitMetrics) addSpellMetrics(spell *Spell, actionID ActionID,
 	}
 
 	if len(actionMetrics.Targets) == 0 {
-		actionMetrics.Targets = make([]TargetedActionMetrics, len(spellMetrics))
+		actionMetrics.Targets = make([]TargetedActionMetrics, numTargets)
 		for i := range actionMetrics.Targets {
 			tam := &actionMetrics.Targets[i]
 			tam.UnitIndex = spell.Unit.AttackTables[i].Defender.UnitIndex
 		}
 	}
 
-	for i, spellTargetMetrics := range spellMetrics {
+	return actionMetrics
+}
+
+// Adds the results of a spell to the character metrics.
+func (unitMetrics *UnitMetrics) addSpellMetrics(spell *Spell, actionMetrics *ActionMetrics, spellMetrics []SpellMetrics) {
+	for i := range spellMetrics {
+		spellTargetMetrics := &spellMetrics[i]
+		if *spellTargetMetrics == (SpellMetrics{}) {
+			// Nothing recorded against this target this iteration.
+			continue
+		}
 		tam := &actionMetrics.Targets[i]
 		tam.Casts += spellTargetMetrics.Casts
 		tam.Misses += spellTargetMetrics.Misses

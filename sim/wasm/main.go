@@ -165,7 +165,8 @@ func raidSimAsync(this js.Value, args []js.Value) interface{} {
 	}
 	reporter := make(chan *proto.ProgressMetrics, 100)
 
-	go core.RunRaidSimAsync(rsr, reporter)
+	// Falls back to the serial runner on single-core runtimes like wasm.
+	go core.RunConcurrentRaidSimAsync(rsr, reporter)
 	return processAsyncProgress(args[1], reporter)
 }
 
